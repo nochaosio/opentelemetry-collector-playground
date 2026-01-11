@@ -1,1 +1,1 @@
-# opentelemetry-collector-playground
+# Opentelemetry Collector Playground
