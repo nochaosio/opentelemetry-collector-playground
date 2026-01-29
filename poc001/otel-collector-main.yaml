@@ -1,0 +1,110 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+connectors:
+  failover/traces:
+    priority_levels:
+      - [traces/primary]
+      - [traces/secondary]
+    retry_interval: 5s
+
+  failover/metrics:
+    priority_levels:
+      - [metrics/primary]
+      - [metrics/secondary]
+    retry_interval: 5s
+
+  failover/logs:
+    priority_levels:
+      - [logs/primary]
+      - [logs/secondary]
+    retry_interval: 5s
+
+exporters:
+  # Primary exporters
+  otlp/primary:
+    endpoint: otel-collector-primary:4317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: false
+    retry_on_failure:
+      enabled: false
+
+  # Secondary exporters (fallback)
+  otlp/secondary:
+    endpoint: otel-collector-secondary:4317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: false
+    retry_on_failure:
+      enabled: false
+
+  debug:
+    verbosity: detailed
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    # Main ingestion pipelines
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [failover/traces, debug]
+
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [failover/metrics, debug]
+
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [failover/logs, debug]
+
+    # Primary pipelines (first priority)
+    traces/primary:
+      receivers: [failover/traces]
+      exporters: [otlp/primary]
+
+    metrics/primary:
+      receivers: [failover/metrics]
+      exporters: [otlp/primary]
+
+    logs/primary:
+      receivers: [failover/logs]
+      exporters: [otlp/primary]
+
+    # Secondary pipelines (fallback)
+    traces/secondary:
+      receivers: [failover/traces]
+      exporters: [otlp/secondary]
+
+    metrics/secondary:
+      receivers: [failover/metrics]
+      exporters: [otlp/secondary]
+
+    logs/secondary:
+      receivers: [failover/logs]
+      exporters: [otlp/secondary]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      address: 0.0.0.0:8888

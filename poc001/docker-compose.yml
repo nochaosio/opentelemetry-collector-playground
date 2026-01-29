@@ -1,0 +1,49 @@
+version: "3.8"
+
+services:
+  # Main collector with failover connector
+  otel-collector-main:
+    image: otel/opentelemetry-collector-contrib:0.117.0
+    container_name: otel-collector-main
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-main.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8888:8888"   # Prometheus metrics
+    depends_on:
+      - otel-collector-primary
+      - otel-collector-secondary
+    networks:
+      - otel-network
+
+  # Primary downstream collector
+  otel-collector-primary:
+    image: otel/opentelemetry-collector-contrib:0.117.0
+    container_name: otel-collector-primary
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-primary.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4327:4317"   # OTLP gRPC
+      - "8889:8888"   # Prometheus metrics
+    networks:
+      - otel-network
+
+  # Secondary downstream collector (fallback)
+  otel-collector-secondary:
+    image: otel/opentelemetry-collector-contrib:0.117.0
+    container_name: otel-collector-secondary
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-secondary.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4337:4317"   # OTLP gRPC
+      - "8890:8888"   # Prometheus metrics
+    networks:
+      - otel-network
+
+networks:
+  otel-network:
+    driver: bridge
